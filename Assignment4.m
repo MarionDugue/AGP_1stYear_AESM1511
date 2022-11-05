@@ -18,7 +18,7 @@ tw = 12*10^(-9);    % [s], t+--he given time window of computation
 fc = [500*10^6, 1*10^9, 2*10^9];  % [Hz], given centre frequencies
 max_factor = 4;     % relates the factor between centre frequency and maximum frequency fmax
 fmax = max_factor*fc;  
-z0 = sqrt(mu0/e0);
+z0 = sqrt(mu0/e0);  
 
 % Initialising layer parameters [Upper half space, Layer1 - Layer4 (Domain D2), Lower half space]
 e_rel = [1, 6, 2, 16, 6, 9]; % relative electric permittivity
@@ -27,54 +27,62 @@ e_abs = e_rel*e0; % multiplication of the relative electrical permittivity and p
 mu_abs = mu_rel*mu0;  % multiplication of the relative magnetic permeability with permittivity of free space gives absolute magnetic permeability   
 s = [0, 10^(-3), 10^(-4), 10^(-2), 10^(-3), 10^(-3)]; % [S/m] electric conductivity given by sigma 
 d = [0.24, 0.10, 0.003, 0.05, 0.15];  % thickness of layers (first element is the height of the source above the ground), thickness of lower halfspace is infinite
-c_rel = c0./sqrt(mu_rel.*e_rel) % relative velocity c in each layer
-c_abs= c0./sqrt(mu_abs.*e_abs)  % absolute velocity c in each layer
+c_rel = c0./sqrt(mu_rel.*e_rel); % relative velocity c in each layer
+c_abs = c0./sqrt(mu_abs.*e_abs);  % absolute velocity c in each layer
 
 % Plotting parameters
 scalefactor = 0.25;  % color bar scales to 0.25 of the maximum and minimum amplitude
 fontsize = 16;       % fontsize used for titles    
-fontstyle ='Arial'; % fontstyle used for titles
+fontstyle ='Arial';  % fontstyle used for titles
 
 %% Task 2: Discretizing Domain, computing maximum velocity and maximum step size
-tstep= (1/2*max(fmax))         % time step is max when t=(1/2fmax), we take max(fmax) to have the greatest time step
-stepsize= max(c_abs)*tstep % maximum step size is when time step is max
-max_stepsize =1/3*min(d)*0.99     % we multiply by 1/3 to make sure that each layer is sampled for atleast 3 points
-if stepsize < min(d)
-    msg= 'This step is smaller than the smallest layer thickness';
-    error(msg);
-else 
-    disp("Maximum time step:")
-    disp(tstep)
-    disp("Maximum step size:")
-    disp(max_stepsize)
-end 
+tstep= (1/2*max(fmax));         % time step is max when t=(1/2fmax)
+stepsize= max(c_rel)*tstep;     % maximum step size is when time step is max
+max_stepsize =1/3*min(d)*0.99;  % we multiply by 1/3 to make sure that each layer is sampled for atleast 3 points
+
+
+% It is then checked whether the z_step is small enough and if not the
+    % z_step and t_step are adjusted
+        if stepsize < max_stepsize
+            disp('The step size of z is small enough so that also the smallest layer is sampled with three or more points')
+        else
+            stepsize = max_stepsize;
+            disp('The step size of z was too large and was therefore decreased to the maximum possible value')  
+            tstep = stepsize/max(c_rel); % when the z_step is decreased we also need to decrease the t_step, because otherwise the condition for z_step>= c_max*t_step is not fulfilled anymore.
+        end
 
 % Make a discrete model and define values of epsilon, sigma and mu for all depth points:
 d_sum = cumsum(d)-d(1); % depth of all interfaces
 t = linspace(0,tw,(tw/tstep)); % creating a time vector
-z = linspace(0,d_sum(end), (d_sum(end)./stepsize)); % creating a depth vector
+z = linspace(0,d_sum(end),(d_sum(end)/stepsize)); % creating a depth vector
 n_t = numel(t); % calculate the number of time points in the model
 n_z = numel(z); % calculate the number of depth points in the model
 
+% create empty vectors for e, s and mu:
+e_z = zeros(n_z,1); 
+s_z = zeros(n_z,1);
+mu_z = zeros(n_z,1);
+
+for i = 2:length(d_sum) % loop over all layers of the domain (corresponds to the elements 2:end of the depth intervals)
+        for j = 1:n_z
+            if z(j) <= d_sum(i) && z(j) >= d_sum(i-1) 
+                e_z(j) = e_abs(i);
+                mu_z(j) = mu_abs(i);
+                s_z(j) = s(i);
+            end
+        end
+    end
 %% Task 3: Precompute the incident electric field for all times
 
 % Definition of useful constants/variables:
 
 t_arg = t - d(1)/c_abs(1); % This is the argument of the wavelet
 tau = sqrt(2)./fc;
-Z_0 = sqrt(mu0/e0);
 
 derv_Elect = zeros(1,numel(t), numel(fc));
 
-  % We calculated by hand the (at z = 0 for all t) dW(t)/dt =
-  % ((t-tau)/tau^2)exp(-2*pi^2*(t/tau-1)^2)*(-8*pi^2-4*pi^2*(1-4*pi^2)*(t/tau-1)^2)
-
-  %By definition, the derivative of Electirc field as a function of t is 
-  %derv_Elect = (-Z_0/2)*dW(t - d(1)/`c_abs(1))/dt
-  % so we get for all fcs: 
-
 for i = 1:numel(fc)
-    derv_Elect(1,:,i) =(-Z_0/2).*((t-tau(i))./tau(i).^2).*exp(-2*pi^2*(t./tau(i)-1).^2).*(-8*pi^2-4*pi^2*(1-4*pi^2)*(t./tau(i)-1).^2)
+    derv_Elect(1,:,i) = z0*(2*pi^2).*(1./tau(i))*((t_arg./tau(i))-1).*exp(-2*pi^2*(t_arg./tau(i)-1).^2).*(3-4*pi^2*(t_arg./tau(i)-1).^2);
 end
 
 
@@ -82,21 +90,51 @@ end
 % Write the finite-difference code to calculate the electric and magnetic
 % fields at all grid points for each time step
 
-%intialise the electric and magnetic field
-E = zeros(numel(z),numel(t)+2,numel(fc)); 
+%Intialise the electric and magnetic field
+E = zeros(numel(z),numel(t)+2,numel(fc)); %Also electric field at time is 0
 H = zeros(numel(z),numel(t)+2,numel(fc));
 
 %Creating useful constants needed for equation 37: 
-denom = mu_abs(1)/mu_abs(2) + stepsize/(c(1)*t);
+denom = (mu_abs(1)/mu_abs(2)) + (stepsize/(c_abs(1)*tstep));
 const_1 = (mu_abs(1)/mu_abs(2))/3;
-const_2 = (stepsize/(c(1)*t))/3;
-const_3 = (2/3)*stepsize/c(1);
-const_4 = t/stepsize
+const_2 = (stepsize/(c_abs(1)*tstep))/3;
+const_3 = (2/3)*stepsize/c_abs(1);
+const_4 = tstep/stepsize;
 
 for f = 1:numel(fc) % all three center frequencies
-    for time = 3:numel(t) % for all times but equation 37 requires a value for time-2 so we start at 3 for numel to work
+    for time = 3:numel(tstep) % for all times but equation 37 requires a value for time-2 so we start at 3 for numel to work
+        % Electric field for 1st depth, defined by boundary condition 37:
+        E(1, time, f) = (const_1*(4*E(1+1,time,f)- E(1+2,time,f)) + const_2*(4*E(1,time-1,f) - E(1,time-2,f))+ const_3*dE(1,time,f))/denom;
+        
         for depth = 1:numel(z) %for all depth points
-            % Equation 37 (for starting at 1 in 1st parameter):
-            E(depth, time, f) = (const_1*(4*E(1+1,time,f)- E(1+2,time,f)) + const_2*(4*E(1,time-1,f) - E(1,time-2,f))+ const_3*dE(1,time,f))/denom;
-            %Equation 27 gives for the magnetic field: 
-            H(depth, time, f) = H(depth, time-1, f) + (const_4/mu_z(a))*(E(depth+1,time,f) - E(depth,time,f));
+            %Calculate Magnetic field H based on equation 27, and using E(1) defined above for initial value of H(1):
+            H(depth, time, f) = H(depth, time-1, f) + (const_4/mu_z(depth))*(E(depth+1,time,f) - E(depth,time,f));
+
+            %Calculating Electric field for all depths based on equation 26
+
+                %Constants needed as a function of depth
+            const_5 = e_z(depth) - s_z(depth)*tstep/2;
+            const_6 = e_z(depth) + s_z(depth)*tstep/2;
+
+                %Equation 26
+            E(depth,time+1,f) = (k_7/k_8)*E(depth,time,f) + (k_6/k_8)*(H(depth,time,f) - H(depth-1,time,f));
+        end
+
+        %The electric field on the boundary (last depth step, numel(z)) is defined with equation 34. So we re-define it here: 
+        const_7 = (mu_abs(6)/mu_abs(5));
+        const_8 = (1/3)*const_7;
+        const_9 = (stepsize/(c_abs(6)*tstep));
+        const_10 = (1/3)*const_9;
+        const_11 = s(6)*sqrt(mu_abs(6)/e_abs(6))*stepsize/3;
+   
+        E(numel(z), time+1, f) = (const_8*(4*E(numel(z)-1,time+1,f)-E(numel(z)-2,time+1,f)) + const_9*(4*E(numel(z),time,f) -E(numel(z),time-1,f)))/(const_7 + const_9 + const_11);
+
+    end
+end
+    
+
+                
+
+
+
+
