@@ -105,11 +105,9 @@ for f = 1:numel(fc) % all three center frequencies
 
     for time = 3:numel(t) % for all times but equation 37 requires a value for time-2 so we start at 3 for numel to work
         % Electric field for 1st depth, defined by boundary condition 37:
-        disp('here')
 
         E(1, time, f) = (const_1*(4*E(1+1,time,f)- E(1+2,time,f)) + const_2*(4*E(1,time-1,f) - E(1,time-2,f))+ const_3*derv_Elect(1,time,f))/denom;
-        any(E(:) > 0)
-        for depth = 1:numel(z) %for all depth points
+        for depth = 1:numel(z)-1 %for all depth points
             %Calculate Magnetic field H based on equation 27, and using E(1) defined above for initial value of H(1):
             H(depth, time, f) = H(depth, time-1, f) + (const_4/mu_z(depth))*(E(depth+1,time,f) - E(depth,time,f));
 
@@ -144,6 +142,7 @@ end
 
 
 
+
 %% Task 5: No explicit loops over depth (ie. use array operations)
 %%We repeat Task 4 (iterations of center of frequencies and time) until the
 %%definition of the 1st electric field boundary condition.
@@ -155,8 +154,8 @@ E_T5 = zeros(numel(z),numel(t)+2,numel(fc)); %Also electric field at time is 0 (
 H_T5 = zeros(numel(z),numel(t)+2,numel(fc));
 
 for f = 1:numel(fc) 
-    for time = 3:numel(tstep) 
-        E_T5(1, time, f) = (const_1*(4*E_T5(1+1,time,f)- E_T5(1+2,time,f)) + const_2*(4*E(1,time-1,f) - E_T5(1,time-2,f))+ const_3*dE(1,time,f))/denom; %from equation 37
+    for time = 3:numel(t) 
+        E_T5(1, time, f) = (const_1*(4*E_T5(1+1,time,f)- E_T5(1+2,time,f)) + const_2*(4*E(1,time-1,f) - E_T5(1,time-2,f))+ const_3*derv_Elect(1,time,f))/denom; %from equation 37
 
         %H at depth 1 has for equation: 
         H_T5(1, time, f) = H_T5(1, time-1, f) + (const_4/mu_z(1))*(E_T5(1+1,time,f) - E_T5(1,time,f)); %from equation 27 
@@ -178,8 +177,6 @@ for f = 1:numel(fc)
    
     E_T5(numel(z), time+1, f) = (const_8*(4*E_T5(numel(z)-1,time+1,f)-E_T5(numel(z)-2,time+1,f)) + const_9*(4*E_T5(numel(z),time,f) -E_T5(numel(z),time-1,f)))/(const_7 + const_9 + const_11);
 end
-
-
 
 
 
