@@ -76,3 +76,27 @@ derv_Elect = zeros(1,numel(t), numel(fc));
 for i = 1:numel(fc)
     derv_Elect(1,:,i) =(-Z_0/2).*((t-tau(i))./tau(i).^2).*exp(-2*pi^2*(t./tau(i)-1).^2).*(-8*pi^2-4*pi^2*(1-4*pi^2)*(t./tau(i)-1).^2)
 end
+
+
+%% Task 4: 
+% Write the finite-difference code to calculate the electric and magnetic
+% fields at all grid points for each time step
+
+%intialise the electric and magnetic field
+E = zeros(numel(z),numel(t)+2,numel(fc)); 
+H = zeros(numel(z),numel(t)+2,numel(fc));
+
+%Creating useful constants needed for equation 37: 
+denom = mu_abs(1)/mu_abs(2) + stepsize/(c(1)*t);
+const_1 = (mu_abs(1)/mu_abs(2))/3;
+const_2 = (stepsize/(c(1)*t))/3;
+const_3 = (2/3)*stepsize/c(1);
+const_4 = t/stepsize
+
+for f = 1:numel(fc) % all three center frequencies
+    for time = 3:numel(t) % for all times but equation 37 requires a value for time-2 so we start at 3 for numel to work
+        for depth = 1:numel(z) %for all depth points
+            % Equation 37 (for starting at 1 in 1st parameter):
+            E(depth, time, f) = (const_1*(4*E(1+1,time,f)- E(1+2,time,f)) + const_2*(4*E(1,time-1,f) - E(1,time-2,f))+ const_3*dE(1,time,f))/denom;
+            %Equation 27 gives for the magnetic field: 
+            H(depth, time, f) = H(depth, time-1, f) + (const_4/mu_z(a))*(E(depth+1,time,f) - E(depth,time,f));
